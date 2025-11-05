@@ -31,3 +31,4 @@ class AlexNet(nn.Module):
 loaded_model = AlexNet()
 loaded_model.load_state_dict(torch.load("AlexNet.pt", map_location="cpu"))
 loaded_model.eval()
+

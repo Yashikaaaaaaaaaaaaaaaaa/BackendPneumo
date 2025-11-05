@@ -4,11 +4,12 @@ import torch
 from torchvision import transforms
 from PIL import Image
 import io
-from model import AlexNet  # Your model class
+import os
+from model import AlexNet  # Your custom model
 
 app = Flask(__name__)
 
-# ✅ Allow both localhost (for testing) and your deployed Vercel frontend
+# ✅ Allow your Vercel frontend and local testing
 CORS(app, resources={
     r"/*": {"origins": [
         "https://minor-cyan.vercel.app",
@@ -16,13 +17,19 @@ CORS(app, resources={
     ]}
 })
 
-# ✅ Load model
-loaded_model = AlexNet()
-loaded_model.load_state_dict(torch.load("AlexNet.pt", map_location="cpu"))
-loaded_model.eval()
-print("✅ Model loaded successfully and ready for predictions!")
+# ✅ Lazy-load model to avoid high startup memory
+loaded_model = None
 
-# ✅ Preprocessing (must match training)
+def get_model():
+    global loaded_model
+    if loaded_model is None:
+        loaded_model = AlexNet()
+        loaded_model.load_state_dict(torch.load("AlexNet.pt", map_location="cpu"))
+        loaded_model.eval()
+        print("✅ Model loaded successfully!")
+    return loaded_model
+
+# ✅ Image preprocessing (same as training)
 transform = transforms.Compose([
     transforms.Resize((64, 64)),
     transforms.ToTensor(),
@@ -35,7 +42,7 @@ labels = ['NORMAL', 'PNEUMONIA']
 def home():
     return jsonify({"message": "✅ Backend is running and ready for predictions!"})
 
-# ✅ Prediction route with confidence
+# ✅ Prediction route
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
@@ -43,9 +50,11 @@ def predict():
         image = Image.open(io.BytesIO(file.read())).convert('RGB')
         img_tensor = transform(image).unsqueeze(0)
 
+        model = get_model()
+
         with torch.no_grad():
-            output = loaded_model(img_tensor)
-            probabilities = torch.softmax(output, dim=1)[0]  # Get confidence values
+            output = model(img_tensor)
+            probabilities = torch.softmax(output, dim=1)[0]
             prediction = torch.argmax(probabilities).item()
 
         confidence = round(probabilities[prediction].item() * 100, 2)
@@ -62,5 +71,7 @@ def predict():
     except Exception as e:
         return jsonify({"error": str(e)})
 
+# ✅ Use dynamic port (important for deployment)
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get("PORT", 7860))  # 7860 = default for Hugging Face
+    app.run(host="0.0.0.0", port=port)
