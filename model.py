@@ -29,5 +29,5 @@ class AlexNet(nn.Module):
 
 # ✅ load the same custom model
 loaded_model = AlexNet()
-loaded_model.load_state_dict(torch.load("./results/AlexNet.pt", map_location="cpu"))
+loaded_model.load_state_dict(torch.load("AlexNet.pt", map_location="cpu"))
 loaded_model.eval()
