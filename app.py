@@ -5,28 +5,27 @@ from torchvision import transforms
 from PIL import Image
 import io
 import os
-from model import AlexNet  # Your custom model
+from model import AlexNet  # your custom model
 
 app = Flask(__name__)
 
-# ✅ Allow your Vercel frontend and local testing
-CORS(app, resources={
-    r"/*": {"origins": [
-        "https://minor-cyan.vercel.app",
-        "http://localhost:3000"
-    ]}
-})
+# ✅ Allow all origins temporarily (for testing)
+# Once it's working, you can limit it again to your frontend domain.
+CORS(app)
 
-# ✅ Lazy-load model to avoid high startup memory
+# ✅ Lazy-load model to avoid high startup memory usage
 loaded_model = None
 
 def get_model():
     global loaded_model
     if loaded_model is None:
         loaded_model = AlexNet()
-        loaded_model.load_state_dict(torch.load("AlexNet.pt", map_location="cpu"))
+        model_path = "AlexNet.pt"
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Model file not found at {model_path}")
+        loaded_model.load_state_dict(torch.load(model_path, map_location="cpu"))
         loaded_model.eval()
-        print("✅ Model loaded successfully!")
+        print("✅ Model loaded successfully and ready for predictions!")
     return loaded_model
 
 # ✅ Image preprocessing (same as training)
@@ -46,6 +45,9 @@ def home():
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
+        if 'image' not in request.files:
+            return jsonify({"error": "No image file provided"}), 400
+
         file = request.files['image']
         image = Image.open(io.BytesIO(file.read())).convert('RGB')
         img_tensor = transform(image).unsqueeze(0)
@@ -69,9 +71,11 @@ def predict():
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)})
+        print(f"❌ Error during prediction: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
-# ✅ Use dynamic port (important for deployment)
+
+# ✅ Render dynamic port
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 7860))  # 7860 = default for Hugging Face
+    port = int(os.environ.get("PORT", 10000))  # Render assigns dynamic ports
     app.run(host="0.0.0.0", port=port)
